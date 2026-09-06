@@ -1,4 +1,4 @@
-# ? BatteryGate — Serverless EV Battery Health & RUL Prediction
+# BatteryGate â€” Serverless EV Battery Health & RUL Prediction
 
 An end-to-end serverless battery intelligence platform that estimates **Remaining Useful Life (RUL)** and **State of Health (SOH)** of lithium-ion batteries using **NASA PCoE degradation benchmarks** and **AWS Lambda ML inference**.
 
@@ -8,18 +8,18 @@ An end-to-end serverless battery intelligence platform that estimates **Remainin
 
 ---
 
-## ??? Architecture
+## Architecture
 \\\
   [ Battery Telemetry / Web App ]
-                 ¦
+                 Â¦
                  ? (HTTPS POST JSON)
   [ AWS Lambda Serverless ML Engine ] --? [ Amazon DynamoDB (Report Store) ]
-                 ¦
+                 Â¦
                  ?
   [ Dynamic Email Certificate Dispatch ] --? [ User Inbox ]
 \\\
 
-## ?? Key Highlights
+##  Key Highlights
 - **Leakage-Free Physical ML:** Random Forest trained on physical NASA discharge/charge voltage curves (^2 = 0.991$, $\text{MAE} < 8$ cycles).
 - **Sub-100ms Inference:** Zero-dependency Python transpilation running on AWS Lambda.
 - **Automated Reporting:** Instant branded HTML Diagnostic Certificate sent to any user email.
