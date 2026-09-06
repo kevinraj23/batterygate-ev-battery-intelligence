@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BatteryGate — EV Battery Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#09090b; --panel:#101013; --panel2:#151518; --line:#1d1d21; --line2:#2a2a30;
+  --txt:#ececee; --muted:#909098; --dim:#55555c; --faint:#3a3a41;
+  --yl:#fde047; --yl2:#facc15; --yl3:#eab308;
+  --amb:#f59e0b; --red:#ef4444;
+  --sans:'Inter',sans-serif; --mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;min-height:100svh;overflow-x:hidden;font-size:16px}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 50% 0%,rgba(250,204,21,.03),transparent 60%)}
+.hidden{display:none!important}
+code{font-family:var(--mono);font-size:.76rem;background:var(--panel2);padding:2px 7px;border-radius:5px;color:var(--yl2)}
+#errBox{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#1a1113;border:1px solid var(--red);color:#f2a0a3;font:400 .7rem var(--mono);padding:10px 16px;border-radius:10px;z-index:300;max-width:92vw}
+
+/* ---------- REVEAL ---------- */
+.rv{opacity:0;transform:translateY(10px)}
+.page.on .rv{animation:rvIn .55s cubic-bezier(.22,1,.36,1) forwards;animation-delay:var(--d,0s)}
+@keyframes rvIn{to{opacity:1;transform:none}}
+.fade-out{animation:pgOut .3s ease forwards}
+@keyframes pgOut{to{opacity:0;transform:translateY(-8px)}}
+
+/* ---------- BOOT ---------- */
+#boot{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;transition:opacity .5s,visibility .5s;animation:bootAuto .5s 8s forwards}
+#boot.done{opacity:0;visibility:hidden}
+@keyframes bootAuto{to{opacity:0;visibility:hidden}}
+.boot-mark{width:clamp(48px,7vw,60px);height:clamp(48px,7vw,60px);border:1px solid var(--line2);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto;background:var(--panel);animation:markPulse 2.4s ease-in-out infinite}
+@keyframes markPulse{0%,100%{border-color:var(--line2)}50%{border-color:var(--yl2)}}
+.boot-mark svg{width:45%;height:45%;fill:var(--yl2);filter:drop-shadow(0 0 8px rgba(250,204,21,.45))}
+.boot-title{margin-top:18px;text-align:center;font-weight:700;letter-spacing:.4em;font-size:clamp(.8rem,2vw,1rem);padding-left:.4em}
+.boot-sub{text-align:center;font-family:var(--mono);font-size:clamp(.52rem,1.2vw,.6rem);letter-spacing:.32em;color:var(--muted);margin-top:7px;padding-left:.32em}
+.boot-lines{margin:clamp(20px,4vh,32px) auto 0;font-family:var(--mono);font-size:.72rem;color:var(--muted);min-height:124px;width:220px}
+.bline{opacity:0;animation:blIn .4s ease forwards;padding:4px 0}
+.bline .ok{color:var(--yl2)}
+.bline.rdy{color:var(--yl2);font-weight:500;letter-spacing:.28em;margin-top:8px}
+@keyframes blIn{to{opacity:1}}
+
+/* ---------- GENERIC ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:clamp(22px,3vw,32px);position:relative;z-index:1}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:clamp(16px,2vw,24px);position:relative;z-index:1}
+.ph{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:.66rem;letter-spacing:.14em;font-weight:600;color:var(--muted);margin-bottom:18px}
+.field{margin-top:18px}
+.field label{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px;font-weight:600}
+.field input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:12px 14px;font-size:.88rem;outline:none;transition:border-color .2s;font-family:var(--mono);min-width:0}
+.field input:focus{border-color:var(--yl3)}
+.field input.bad{border-color:var(--red)}
+.btn{width:100%;margin-top:24px;padding:13px;border:1px solid transparent;border-radius:10px;cursor:pointer;font:700 .78rem var(--sans);letter-spacing:.14em;color:var(--bg);background:#ececee;transition:background .2s,transform .15s}
+.btn:hover{background:#fff}
+.btn:active{transform:scale(.985)}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn-yl{background:var(--yl2);color:var(--bg)}
+.btn-yl:hover{background:var(--yl)}
+.btn-ghost{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 15px;cursor:pointer;font:600 .64rem var(--sans);letter-spacing:.1em;transition:.2s;width:auto;margin:0}
+.btn-ghost:hover{border-color:var(--yl3);color:var(--txt)}
+
+/* ---------- PAGE 1 (fluid flex — fits any screen) ---------- */
+#page1{min-height:100vh;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:clamp(28px,6vh,64px) clamp(16px,4vw,40px);position:relative;z-index:1}
+.lg-wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:clamp(36px,6vw,84px);width:100%;max-width:1160px;margin:0 auto}
+.lg-left{flex:1 1 480px;max-width:580px;min-width:0}
+.lg-wrap > .card{flex:1 1 380px;max-width:470px;min-width:0}
+.brand{font-size:clamp(1.55rem,3.2vw,2.35rem);font-weight:700;letter-spacing:.01em}
+.brand .zap{display:inline-block;margin-right:8px;animation:zapBob 4s ease-in-out infinite}
+@keyframes zapBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.brand svg.bolt{width:clamp(20px,2.4vw,27px);height:clamp(20px,2.4vw,27px);fill:var(--yl2);filter:drop-shadow(0 0 10px rgba(250,204,21,.5))}
+.brand-tag{font-family:var(--mono);letter-spacing:.4em;font-size:clamp(.58rem,1.3vw,.68rem);color:var(--muted);margin-top:8px}
+.brand-desc{color:var(--muted);font-size:clamp(.8rem,1.5vw,.9rem);line-height:1.75;margin-top:18px;max-width:440px}
+.module{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--panel);margin-top:28px;position:relative;animation:floaty 7s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.module::after{content:"";position:absolute;right:-8px;top:32px;width:6px;height:14px;background:var(--line2);border-radius:0 3px 3px 0}
+.m-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;font-family:var(--mono);font-size:.64rem;color:var(--muted);letter-spacing:.08em;margin-bottom:12px}
+.m-head b{color:var(--yl2);font-weight:500}
+.cells{display:grid;grid-template-columns:repeat(8,1fr);gap:7px}
+.cellp{height:clamp(28px,4vw,38px);border:1px solid var(--line);border-radius:4px;background:#0c0c0e;position:relative;overflow:hidden}
+.cellp i{position:absolute;left:0;right:0;bottom:0;height:12%;background:linear-gradient(180deg,var(--yl),var(--yl3));animation:chargeWave 4.5s cubic-bezier(.45,.05,.55,.95) infinite;animation-delay:calc(var(--i)*.3s)}
+@keyframes chargeWave{0%{height:14%}38%{height:88%}62%{height:80%}100%{height:14%}}
+.m-foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-top:12px;font-family:var(--mono);font-size:.62rem;color:var(--dim)}
+#ticker{color:var(--yl2)}
+.marq{margin-top:30px;overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0;position:relative}
+.marq::before,.marq::after{content:"";position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
+.marq::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+.marq::after{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+.marq-track{display:inline-flex;white-space:nowrap;animation:marq 40s linear infinite}
+.marq-g{display:inline-flex}
+.marq-g span{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;color:var(--faint);margin-right:44px}
+.marq-g b{color:var(--yl3);font-weight:400;margin-right:44px}
+@keyframes marq{to{transform:translateX(-50%)}}
+.lg-foot{font-size:.7rem;color:var(--dim);border-top:1px solid var(--line);padding-top:15px;margin-top:20px;line-height:2}
+.lg-foot b{color:var(--muted)}
+
+/* ---------- CONNECT OVERLAY ---------- */
+#connect{position:fixed;inset:0;background:rgba(9,9,11,.92);backdrop-filter:blur(6px);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;animation:ovIn .3s ease forwards}
+@keyframes ovIn{to{opacity:1}}
+.cbatt{width:72px;height:28px;border:1px solid var(--yl2);border-radius:7px;margin:0 auto;position:relative;padding:3px;box-shadow:0 0 14px rgba(250,204,21,.18)}
+.cbatt::after{content:"";position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:4px;height:11px;background:var(--yl2);border-radius:0 3px 3px 0}
+.cbatt i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--yl3),var(--yl));transition:width .5s cubic-bezier(.22,1,.36,1)}
+.c-step{margin:24px 0 16px;text-align:center;font-family:var(--mono);font-size:.78rem;letter-spacing:.22em;color:var(--muted);min-height:1.3em}
+.c-step.rdy{color:var(--yl2)}
+.c-log{font-family:var(--mono);font-size:.62rem;color:var(--faint);width:min(300px,80vw);min-height:92px;margin:0 auto}
+.c-log div{opacity:0;animation:blIn .3s forwards;padding:3px 0;color:var(--dim)}
+.c-log div::before{content:"✓ ";color:var(--yl2)}
+
+/* ---------- PAGE 2 ---------- */
+#page2{position:relative;z-index:1}
+.app{width:min(100% - clamp(24px,4vw,56px),1320px);margin:0 auto;padding:clamp(20px,3vh,30px) 0 80px}
+.hdr{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.b-name{font-weight:700;font-size:clamp(.95rem,1.6vw,1.1rem)}
+.b-name svg{width:15px;height:15px;fill:var(--yl2);vertical-align:-2px;filter:drop-shadow(0 0 6px rgba(250,204,21,.45))}
+.b-sub{font-family:var(--mono);letter-spacing:.26em;font-size:.55rem;color:var(--muted);margin-top:3px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font:500 .57rem var(--mono);letter-spacing:.08em;color:var(--muted)}
+.pdot{width:5px;height:5px;border-radius:50%;background:var(--yl2);animation:pdot 2.6s ease-in-out infinite;flex-shrink:0}
+@keyframes pdot{0%,100%{opacity:.4}50%{opacity:1}}
+.u-area{display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative}
+.u-chip{font-size:.7rem;color:var(--muted)}
+.u-chip b{color:var(--txt);font-weight:500}
+.u-chip span{overflow-wrap:anywhere}
+.gear{background:none;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;cursor:pointer;color:var(--muted);font-size:14px;transition:.2s;flex-shrink:0}
+.gear:hover{border-color:var(--yl3);color:var(--yl2)}
+.set-pop{position:absolute;right:0;top:calc(100% + 12px);width:min(330px,calc(100vw - 40px));background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:18px;opacity:0;transform:translateY(-6px);pointer-events:none;transition:.25s;z-index:50}
+.set-pop.open{opacity:1;transform:none;pointer-events:auto}
+.set-pop .field{margin-top:6px}
+.set-pop .btn{margin-top:14px;padding:10px}
+.grid{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:20px;margin-top:26px;align-items:start}
+.grid > *{min-width:0}
+.preset{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:13px 15px;cursor:pointer;margin-bottom:10px;transition:border-color .2s;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.preset:hover{border-color:var(--line2)}
+.preset.active{border-color:var(--yl2)}
+.p-n{font-size:.76rem;font-weight:500}
+.p-i{font:400 .6rem var(--mono);color:var(--dim);margin-top:3px}
+.g{font:500 .55rem var(--mono);padding:4px 9px;border-radius:999px;letter-spacing:.1em;border:1px solid var(--line2);flex-shrink:0}
+.gA{color:var(--yl2)}
+.gB{color:var(--amb)}
+.gC{color:var(--red);border-color:rgba(239,68,68,.35)}
+.tele{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;position:relative}
+.tele.scan::after{content:"";position:absolute;left:-8px;right:-8px;height:56px;top:-56px;background:linear-gradient(180deg,transparent,rgba(250,204,21,.06),transparent);animation:sweep 1.6s linear infinite;pointer-events:none;z-index:3}
+@keyframes sweep{to{top:100%}}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 14px;transition:border-color .3s;min-width:0}
+.tele.scan .tile{animation:tileGlow 1.6s linear infinite;animation-delay:calc(var(--i)*.18s)}
+@keyframes tileGlow{0%,100%{border-color:var(--line)}45%{border-color:var(--yl3)}}
+.t-l{font-size:.57rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600}
+.t-v{font:500 1.05rem var(--mono);margin:6px 0 10px}
+.t-v .u{font-size:.6rem;color:var(--dim);font-weight:400}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:99px;background:linear-gradient(90deg,var(--yl3) var(--p,50%),var(--line) var(--p,50%));cursor:pointer;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--yl2);transition:transform .15s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--yl2);border:none}
+.live{display:flex;align-items:center;gap:6px;font:500 .55rem var(--mono);color:var(--muted);letter-spacing:.12em}
+.hero{display:flex;gap:clamp(20px,3vw,34px);flex-wrap:wrap;align-items:center}
+.gauge{width:clamp(165px,22vw,225px);height:auto;display:block;flex-shrink:0}
+.hero-stats{flex:1 1 240px;min-width:0}
+#gaugeSpin{transform-box:fill-box;transform-origin:center;animation:spin 30s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stat-big{font:700 clamp(1.5rem,2.6vw,2.15rem) var(--mono);line-height:1}
+.stat-u{font:400 .7rem var(--sans);color:var(--muted)}
+.gchip{display:inline-block;font:500 .58rem var(--mono);padding:5px 12px;border-radius:999px;letter-spacing:.12em;margin:14px 0 10px;border:1px solid var(--line2);color:var(--dim)}
+.gchip.gA{color:var(--yl2);border-color:rgba(250,204,21,.4)}
+.gchip.gB{color:var(--amb);border-color:rgba(245,158,11,.4)}
+.gchip.gC{color:var(--red);border-color:rgba(239,68,68,.35)}
+.dir{font-size:.8rem;color:var(--muted);line-height:1.65}
+.meta{margin-top:16px;font:400 .63rem var(--mono);color:var(--dim);line-height:2.2}
+.meta b{color:var(--muted);font-weight:400}
+.meta span{overflow-wrap:anywhere}
+#chartSvg{width:100%;height:auto;display:block}
+#chartSvg text{font-family:var(--mono)}
+.projp{opacity:0;transition:opacity .8s ease .9s}
+#steps{list-style:none}
+#steps li{display:flex;gap:11px;align-items:center;padding:9px 13px;border-radius:8px;color:var(--faint);font-size:.78rem;transition:.3s}
+#steps li.run{background:rgba(250,204,21,.05);color:var(--txt)}
+#steps li.done{color:var(--muted)}
+.s-n{font:400 .6rem var(--mono);color:var(--faint)}
+.s-st{margin-left:auto}
+.okc{display:inline-block;color:var(--yl2);animation:pop .3s ease}
+@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.spin{width:12px;height:12px;border:1.5px solid var(--line2);border-top-color:var(--yl2);border-radius:50%;display:inline-block;animation:rot .9s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.simb{font:500 .55rem var(--mono);color:var(--muted);border:1px dashed var(--line2);padding:4px 10px;border-radius:999px;letter-spacing:.12em}
+#simNote{font-size:.68rem;color:var(--dim);margin-top:12px;line-height:1.6}
+#resCard.pop{animation:riseIn .5s cubic-bezier(.22,1,.36,1) both}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+#resCard.crit{animation:riseIn .5s cubic-bezier(.22,1,.36,1) both,critP 2.4s 1.2s infinite}
+@keyframes critP{0%,100%{border-color:var(--line)}50%{border-color:rgba(239,68,68,.5)}}
+.banner{border-left:3px solid;border-radius:8px;padding:15px 18px}
+.banner .bt{font-weight:600;font-size:.95rem}
+.banner .bs{font:400 .62rem var(--mono);margin-top:6px;opacity:.85}
+.banner.gA{border-color:var(--yl2);background:rgba(250,204,21,.05);color:var(--yl2)}
+.banner.gB{border-color:var(--amb);background:rgba(245,158,11,.05);color:var(--amb)}
+.banner.gC{border-color:var(--red);background:rgba(239,68,68,.04);color:var(--red)}
+#resCard .dir{margin-top:12px}
+.alerts{margin-top:14px;font:400 .67rem var(--mono);color:var(--red);line-height:2.2;opacity:.85}
+.crow{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:.74rem;color:var(--muted);padding:6px 0}
+.bar{height:6px;background:var(--panel2);border-radius:99px;overflow:hidden;margin:14px 0 10px}
+#cbar{height:100%;width:0%;background:var(--yl2);border-radius:99px;transition:width .12s linear}
+.cst{font:500 .6rem var(--mono);letter-spacing:.16em;color:var(--dim)}
+.cst .ok{color:var(--yl2);display:inline-block;animation:pop .3s ease}
+footer{margin-top:36px;text-align:center;font:400 .58rem var(--mono);color:var(--faint);letter-spacing:.14em;padding:0 16px}
+#toast{position:fixed;bottom:30px;left:50%;transform:translate(-50%,12px);background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:11px 20px;font-size:.74rem;opacity:0;transition:.3s;z-index:200;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- RESPONSIVE: BIG SCREENS ---------- */
+@media (min-width:1600px){
+  .app{max-width:1400px}
+  .lg-wrap{max-width:1260px}
+  .lg-left{max-width:640px}
+  .lg-wrap > .card{max-width:500px}
+}
+/* ---------- RESPONSIVE: TABLETS ---------- */
+@media (max-width:1000px){
+  .grid{grid-template-columns:1fr}
+  .pills{justify-content:flex-start}
+}
+/* ---------- RESPONSIVE: PHONES ---------- */
+@media (max-width:640px){
+  .lg-wrap{gap:34px}
+  .lg-left{flex-basis:100%}
+  .lg-wrap > .card{flex-basis:100%;max-width:520px}
+  .module{margin-top:20px}
+  .marq{margin-top:20px}
+  .marq-g span,.marq-g b{margin-right:26px;letter-spacing:.14em}
+  .cells{gap:5px}
+  .hero-stats{flex-basis:100%}
+  .gauge{margin:0 auto}
+  .dir{max-width:none}
+  .stat-big{white-space:nowrap}
+  .banner{padding:12px 14px}
+  .banner .bt{font-size:.85rem}
+  #steps li{font-size:.72rem;padding:8px 10px}
+  .hdr{gap:12px}
+  .u-area{width:100%}
+  footer{letter-spacing:.08em}
+}
+@media (max-width:400px){
+  .tele{grid-template-columns:1fr}
+  .pill{padding:5px 9px;font-size:.52rem}
+  .brand{letter-spacing:0}
+}
+/* ---------- SHORT LAPTOP SCREENS ---------- */
+@media (max-height:760px) and (min-width:1000px){
+  #page1{padding-top:20px;padding-bottom:20px}
+  .module{margin-top:18px}
+  .marq{margin-top:18px}
+}
+/* ---------- REDUCED MOTION ---------- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .rv{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<noscript><div style="position:fixed;top:0;left:0;right:0;background:#ef4444;color:#fff;padding:12px;text-align:center;font-family:monospace;z-index:999">⚠ JavaScript is blocked in this viewer — save this file as .html and open it directly in Chrome/Edge/Firefox.</div></noscript>
+<div id="errBox"></div>
+
+<!-- ================= BOOT ================= -->
+<div id="boot">
+  <div>
+    <div class="boot-mark"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg></div>
+    <div class="boot-title">BATTERYGATE</div>
+    <div class="boot-sub">TELEMATICS</div>
+    <div class="boot-lines" id="bootLines"></div>
+  </div>
+</div>
+
+<!-- ================= PAGE 1 : SIGN-IN ================= -->
+<div id="page1" class="page">
+  <div class="lg-wrap">
+    <div class="lg-left">
+      <div class="rv" style="--d:.05s">
+        <div class="brand"><span class="zap"><svg class="bolt" viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg></span>BATTERYGATE</div>
+        <div class="brand-tag">EV BATTERY INTELLIGENCE</div>
+        <p class="brand-desc">Serverless battery health &amp; SOH diagnostics. NASA PCoE-trained RUL models on AWS Lambda — certificates dispatched straight to your inbox.</p>
+      </div>
+
+      <div class="module rv" style="--d:.18s">
+        <div class="m-head"><span>PACK · BGP-350</span><b id="packSoh">SOH 97.2%</b></div>
+        <div class="cells" id="cells"></div>
+        <div class="m-foot"><span id="ticker">CELL 01 · 3.94 V · NOMINAL</span><span id="mtemp">31.5 °C</span></div>
+      </div>
+
+      <div class="marq rv" style="--d:.3s">
+        <div class="marq-track">
+          <div class="marq-g"><b>⚡ BATTERY HEALTH ANALYSIS</b><span>RUL PREDICTION</span><b>🛰 NASA PCoE MODELS</b><span>DYNAMODB LOGGING</span><b>📧 EMAIL CERTIFICATES</b><span>SERVERLESS INFERENCE</span></div>
+          <div class="marq-g"><b>⚡ BATTERY HEALTH ANALYSIS</b><span>RUL PREDICTION</span><b>🛰 NASA PCoE MODELS</b><span>DYNAMODB LOGGING</span><b>📧 EMAIL CERTIFICATES</span><span>SERVERLESS INFERENCE</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card rv" style="--d:.12s">
+      <div style="font-size:.66rem;letter-spacing:.16em;font-weight:600;color:var(--muted)">TECHNICIAN ACCESS</div>
+      <p style="font-size:.76rem;color:var(--muted);margin-top:10px;line-height:1.65">Sign in to link your email. Diagnostic certificates &amp; thermal alerts route here automatically.</p>
+      <form id="signinForm">
+        <div class="field"><label>Technician Name</label><input type="text" id="inName" placeholder="Type your name" autocomplete="name"></div>
+        <div class="field"><label>Email Address</label><input type="email" id="inMail" placeholder="Type your email" autocomplete="email"></div>
+        <button class="btn" type="submit" id="signinBtn">NEXT →</button>
+      </form>
+      <div class="lg-foot">
+        ✔ <b>Zero-Cost Serverless ML</b> — AWS Lambda + NASA PCoE aging data<br>
+        ✔ <b>Direct Inbox Dispatch</b> — instant HTML certificate delivery
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CONNECT OVERLAY ================= -->
+<div id="connect" class="hidden">
+  <div style="text-align:center">
+    <div class="cbatt"><i id="cbattFill"></i></div>
+    <div class="c-step" id="cStep">CONNECTING…</div>
+    <div class="c-log" id="cLog"></div>
+  </div>
+</div>
+
+<!-- ================= PAGE 2 : BATTERY REPORT ================= -->
+<div id="page2" class="page hidden">
+  <div class="app">
+    <header class="hdr rv" style="--d:.05s">
+      <div>
+        <div class="b-name"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg> BatteryGate</div>
+        <div class="b-sub">BATTERY REPORT · LIVE DIAGNOSTICS</div>
+      </div>
+      <div class="pills">
+        <div class="pill"><span class="pdot"></span>LAMBDA · ONLINE</div>
+        <div class="pill"><span class="pdot"></span>ML ENGINE · READY</div>
+        <div class="pill"><span class="pdot"></span>DYNAMODB · CONNECTED</div>
+        <div class="pill"><span class="pdot"></span>EMAIL · READY</div>
+      </div>
+      <div class="u-area">
+        <div class="u-chip">👤 <b id="chipUser"></b></div>
+        <div class="u-chip">📧 <span id="chipMail" style="font-family:var(--mono);font-size:.64rem"></span></div>
+        <button class="gear" id="gearBtn" title="Cloud endpoint settings">⚙</button>
+        <div class="set-pop" id="setPop">
+          <div class="ph" style="margin:0">CLOUD ENDPOINT</div>
+          <div class="field"><input type="url" id="setUrl" placeholder="https://…lambda-url….on.aws/"></div>
+          <button class="btn" id="setSave">SAVE ENDPOINT</button>
+        </div>
+        <button class="btn-ghost" id="outBtn">SIGN OUT</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div>
+        <div class="panel rv" style="--d:.14s">
+          <div class="ph">QUICK VEHICLE PRESETS</div>
+          <div id="presets"></div>
+          <div class="field"><label>Vehicle / Battery Pack ID</label><input type="text" id="batteryId" value="TATA-NEXON-001"></div>
+        </div>
+        <div class="panel rv" style="--d:.24s">
+          <div class="ph">PHYSICAL CYCLE MEASUREMENTS <span class="live"><span class="pdot"></span>LIVE</span></div>
+          <div class="tele" id="tele"></div>
+          <button class="btn btn-yl" id="runBtn">⚡ RUN AI DIAGNOSIS</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel rv" style="--d:.18s">
+          <div class="ph">🔋 BATTERY HEALTH</div>
+          <div class="hero">
+            <svg class="gauge" viewBox="0 0 230 230">
+              <defs>
+                <linearGradient id="grA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde047"/><stop offset="1" stop-color="#eab308"/></linearGradient>
+                <linearGradient id="grB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#facc15"/><stop offset="1" stop-color="#d97706"/></linearGradient>
+                <linearGradient id="grC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#facc15"/><stop offset="1" stop-color="#ef4444"/></linearGradient>
+              </defs>
+              <circle id="gaugeSpin" cx="115" cy="115" r="107" fill="none" stroke="#1a1a1e" stroke-width="1" stroke-dasharray="2 7"/>
+              <circle cx="115" cy="115" r="96" fill="none" stroke="#141417" stroke-width="8"/>
+              <circle id="gaugeArc" cx="115" cy="115" r="96" fill="none" stroke="url(#grA)" stroke-width="8" stroke-linecap="round" transform="rotate(-90 115 115)" stroke-dasharray="603.2" stroke-dashoffset="603.2"/>
+              <text id="gPct" x="115" y="112" text-anchor="middle" font-size="38" font-weight="700" fill="#ececee">--%</text>
+              <text x="115" y="134" text-anchor="middle" font-size="10" fill="#909098" letter-spacing="4">SOH</text>
+              <text id="gGrade" x="115" y="162" text-anchor="middle" font-size="12" font-weight="700" fill="#55555c" letter-spacing="2">STANDBY</text>
+            </svg>
+            <div class="hero-stats">
+              <div class="stat-big"><span id="rulVal">—</span> <span class="stat-u">cycles remaining</span></div>
+              <div class="gchip" id="gchip">AWAITING DIAGNOSIS</div>
+              <p class="dir" id="dirTxt">Select a preset or tune the telemetry, then run the AI diagnosis. Output: estimated SOH, remaining useful life and health grade.</p>
+              <div class="meta">
+                <div>📧 <b>Certificate →</b> <span id="mMail"></span></div>
+                <div>🗄 <b>DynamoDB log</b> <span id="mTs">—</span></div>
+                <div>🚗 <b>Pack ID</b> <span id="mVin">—</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel rv" style="--d:.28s">
+          <div class="ph">📉 DEGRADATION PROFILE <span style="font:400 .56rem var(--mono);color:var(--dim)">SOH vs CYCLES · dashed = prediction</span></div>
+          <svg id="chartSvg" viewBox="0 0 620 240"><text x="310" y="120" text-anchor="middle" fill="#55555c" font-size="12">AWAITING FIRST DIAGNOSIS</text></svg>
+        </div>
+
+        <div class="panel rv" style="--d:.34s">
+          <div class="ph">AI DIAGNOSTIC PIPELINE <span id="simBadge" class="simb hidden">SIMULATION MODE</span></div>
+          <ul id="steps">
+            <li><span class="s-n">01</span>Feature extraction<span class="s-st"></span></li>
+            <li><span class="s-n">02</span>ML inference · AWS Lambda<span class="s-st"></span></li>
+            <li><span class="s-n">03</span>RUL estimation<span class="s-st"></span></li>
+            <li><span class="s-n">04</span>Health classification<span class="s-st"></span></li>
+            <li><span class="s-n">05</span>DynamoDB logging<span class="s-st"></span></li>
+            <li><span class="s-n">06</span>Certificate dispatch<span class="s-st"></span></li>
+          </ul>
+          <div id="simNote" class="hidden">Live endpoint unreachable (check Function URL / CORS) — showing simulated model output so the demo continues.</div>
+        </div>
+
+        <div class="panel hidden" id="resCard">
+          <div class="ph">AI DIAGNOSIS RESULT</div>
+          <div id="resBody"></div>
+        </div>
+
+        <div class="panel hidden" id="certCard">
+          <div class="ph">CERTIFICATE DISPATCH</div>
+          <div class="crow"><span>Recipient</span><code id="certMail"></code></div>
+          <div class="crow"><span>Document</span><span>Battery Health Certificate (HTML)</span></div>
+          <div class="bar"><div id="cbar"></div></div>
+          <div class="cst" id="cst">QUEUED</div>
+        </div>
+      </div>
+    </div>
+    <footer>POWERED BY AWS LAMBDA · DYNAMODB · NASA PCoE BATTERY AGING DATA</footer>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ⚠️ PASTE YOUR LAMBDA FUNCTION URL HERE — or set it later via the ⚙ button on page 2 */
+var LAMBDA_URL = "https://rh3tpejwo2iyov7nmgrtfomyji0sohry.lambda-url.us-east-1.on.aws/";
+
+function $(s){return document.querySelector(s)}
+function $$(s){return Array.prototype.slice.call(document.querySelectorAll(s))}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+var store={
+  get:function(k){try{return window.localStorage.getItem(k)}catch(e){return null}},
+  set:function(k,v){try{window.localStorage.setItem(k,v)}catch(e){}}
+};
+window.addEventListener("error",function(e){
+  var b=document.getElementById("errBox");
+  if(b){b.style.display="block";b.textContent="⚠ Script error: "+(e.message||"unknown")+" — press F12 for details.";}
+});
+var state={name:"",email:"",endpoint:store.get("bg_endpoint")||LAMBDA_URL,running:false,busy:false};
+
+/* ============ BOOT ============ */
+(function(){
+  var done=false;
+  function finish(){if(done)return;done=true;$("#boot").classList.add("done");$("#page1").classList.add("on")}
+  setTimeout(finish,7000);
+  (async function(){
+    var el=$("#bootLines");
+    var lines=["Cloud Gateway","ML Engine","Battery Analytics","Diagnostic Pipeline"];
+    for(var i=0;i<lines.length;i++){
+      await sleep(380);
+      var d=document.createElement("div");d.className="bline";
+      d.innerHTML='<span class="ok">✓</span> '+lines[i];el.appendChild(d);
+    }
+    await sleep(420);
+    var r=document.createElement("div");r.className="bline rdy";r.textContent="SYSTEM READY";el.appendChild(r);
+    await sleep(620);
+    finish();
+  })().catch(finish);
+})();
+
+/* ============ BATTERY MODULE ============ */
+(function(){
+  var w=$("#cells");
+  for(var i=0;i<8;i++){
+    var c=document.createElement("div");c.className="cellp";
+    var f=document.createElement("i");f.style.setProperty("--i",i);c.appendChild(f);w.appendChild(c);
+  }
+  var i=1;
+  setInterval(function(){$("#ticker").textContent="CELL "+("0"+i).slice(-2)+" · "+(3.86+Math.random()*0.11).toFixed(2)+" V · NOMINAL";i=i%24+1;},900);
+  setInterval(function(){$("#packSoh").textContent="SOH "+(96.9+Math.random()*0.4).toFixed(1)+"%";},3200);
+  setInterval(function(){$("#mtemp").textContent=(31+Math.random()*1.6).toFixed(1)+" °C";},3800);
+})();
+
+/* ============ TOAST ============ */
+function toast(msg){
+  var t=$("#toast");t.textContent=msg;t.classList.add("show");
+  clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove("show")},2300);
+}
+
+/* ============ SIGN-IN ============ */
+document.getElementById("signinForm").addEventListener("submit",function(e){e.preventDefault();signIn()});
+
+function enterApp(){
+  $("#connect").classList.add("hidden");
+  $("#cStep").classList.remove("rdy");
+  $("#cbattFill").style.width="0%";
+  $("#page1").classList.add("fade-out");
+  setTimeout(function(){
+    $("#page1").classList.add("hidden");
+    $("#page1").classList.remove("fade-out","on");
+    var p2=$("#page2");p2.classList.remove("hidden");
+    requestAnimationFrame(function(){p2.classList.add("on")});
+    $("#chipUser").textContent=state.name;
+    $("#chipMail").textContent=state.email;
+    $("#mMail").textContent=state.email;
+  },320);
+}
+
+async function signIn(){
+  if(state.busy)return;
+  var name=$("#inName").value.trim(), email=$("#inMail").value.trim();
+  $("#inName").classList.remove("bad");$("#inMail").classList.remove("bad");
+  if(!name){$("#inName").classList.add("bad");toast("⚠️ Please type your name.");return;}
+  if(!email){$("#inMail").classList.add("bad");toast("⚠️ Please type your email.");return;}
+  state.busy=true;state.name=name;state.email=email;
+  var steps=["ESTABLISHING GATEWAY","AUTHENTICATING TECHNICIAN","LOADING ML ENGINE","SYNCING TELEMETRY"];
+  var watchdog=setTimeout(enterApp,6000);
+  try{
+    $("#connect").classList.remove("hidden");$("#cLog").innerHTML="";
+    for(var i=0;i<steps.length;i++){
+      $("#cStep").textContent=steps[i]+"…";
+      $("#cbattFill").style.width=(((i+1)/steps.length)*100)+"%";
+      await sleep(580);
+      var d=document.createElement("div");d.textContent=steps[i];$("#cLog").appendChild(d);
+    }
+    $("#cStep").textContent="SYSTEM READY";$("#cStep").classList.add("rdy");
+    await sleep(560);
+  }catch(err){}
+  clearTimeout(watchdog);
+  enterApp();
+  state.busy=false;
+}
+
+document.getElementById("outBtn").addEventListener("click",function(){
+  $("#page2").classList.add("fade-out");
+  setTimeout(function(){
+    $("#page2").classList.add("hidden");
+    $("#page2").classList.remove("fade-out","on");
+    var p1=$("#page1");p1.classList.remove("hidden");
+    requestAnimationFrame(function(){p1.classList.add("on")});
+  },320);
+});
+
+/* ============ SETTINGS ============ */
+document.getElementById("gearBtn").addEventListener("click",function(e){
+  e.stopPropagation();
+  $("#setUrl").value=state.endpoint;
+  $("#setPop").classList.toggle("open");
+});
+document.addEventListener("click",function(e){
+  if(!e.target.closest(".u-area"))$("#setPop").classList.remove("open");
+});
+document.getElementById("setSave").addEventListener("click",function(){
+  state.endpoint=$("#setUrl").value.trim();
+  store.set("bg_endpoint",state.endpoint);
+  $("#setPop").classList.remove("open");
+  toast("Cloud endpoint saved");
+});
+
+/* ============ PRESETS + TELEMETRY ============ */
+var PRESETS={
+  A:{label:"Brand New Tata Nexon EV",id:"TATA-NEXON-001",dis:1450,maxv:4.22,minv:3.15,t415:650,tcc:1980,tch:2900},
+  B:{label:"Moderate Used Ather 450X",id:"ATHER-450X-042",dis:950,maxv:4.05,minv:2.85,t415:320,tcc:1200,tch:2100},
+  C:{label:"Degraded Ola S1 Pack",id:"USED-OLA-PACK-999",dis:450,maxv:3.75,minv:2.45,t415:45,tcc:400,tch:850}
+};
+var FIELDS=[
+  {k:"dis", l:"Discharge Duration", u:"s", min:200, max:1800, step:10},
+  {k:"tch", l:"Charging Time",      u:"s", min:500, max:3500, step:10},
+  {k:"maxv",l:"Max Voltage (Disch.)",u:"V", min:3.0, max:4.5,  step:0.01},
+  {k:"minv",l:"Min Voltage (Chg.)", u:"V", min:2.0, max:3.8,  step:0.01},
+  {k:"t415",l:"Time @ 4.15V (CV)",  u:"s", min:0,   max:800,  step:5},
+  {k:"tcc", l:"Time in CC Mode",    u:"s", min:200, max:2200, step:10}
+];
+function fmt(v,k){return (k==="maxv"||k==="minv")?(+v).toFixed(2):Math.round(+v).toString()}
+
+(function renderPresets(){
+  var w=$("#presets");
+  Object.keys(PRESETS).forEach(function(k){
+    var p=PRESETS[k];
+    var el=document.createElement("div");
+    el.className="preset"+(k==="A"?" active":"");
+    el.innerHTML='<div><div class="p-n">'+p.label+'</div><div class="p-i">'+p.id+'</div></div><span class="g g'+k+'">GRADE '+k+'</span>';
+    el.onclick=function(){
+      $$(".preset").forEach(function(x){x.classList.remove("active")});
+      el.classList.add("active");
+      $("#batteryId").value=p.id;
+      FIELDS.forEach(function(f){setSlider(f.k,p[f.k])});
+    };
+    w.appendChild(el);
+  });
+})();
+
+(function renderTele(){
+  var w=$("#tele");
+  FIELDS.forEach(function(f,i){
+    var t=document.createElement("div");t.className="tile";t.style.setProperty("--i",i);
+    t.innerHTML='<div class="t-l">'+f.l+'</div><div class="t-v"><span id="v_'+f.k+'">–</span> <span class="u">'+f.u+'</span></div><input type="range" id="s_'+f.k+'" min="'+f.min+'" max="'+f.max+'" step="'+f.step+'">';
+    w.appendChild(t);
+    document.getElementById("s_"+f.k).addEventListener("input",function(){
+      $$(".preset").forEach(function(x){x.classList.remove("active")});
+      paint(f.k);
+    });
+  });
+  FIELDS.forEach(function(f){setSlider(f.k,PRESETS.A[f.k])});
+})();
+
+function paint(k){
+  var f=null;FIELDS.forEach(function(x){if(x.k===k)f=x});
+  var inp=document.getElementById("s_"+k);
+  document.getElementById("v_"+k).textContent=fmt(inp.value,k);
+  inp.style.setProperty("--p",((inp.value-f.min)/(f.max-f.min)*100)+"%");
+}
+function setSlider(k,val){document.getElementById("s_"+k).value=val;paint(k)}
+
+/* ============ ANIMATION HELPERS ============ */
+function countUp(el,to,dur){
+  dur=dur||1300;var t0=performance.now();
+  (function f(t){
+    var k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);
+    el.textContent=Math.round(to*e).toLocaleString();
+    if(k<1)requestAnimationFrame(f);
+  })(t0);
+}
+function animateGauge(pct,grade){
+  var C=603.2,arc=$("#gaugeArc");
+  arc.setAttribute("stroke","url(#gr"+grade+")");
+  var t0=performance.now();
+  (function f(t){
+    var k=Math.min(1,(t-t0)/1400),e=1-Math.pow(1-k,4);
+    arc.style.strokeDashoffset=C*(1-(pct/100)*e);
+    $("#gPct").textContent=Math.round(pct*e)+"%";
+    if(k<1)requestAnimationFrame(f);
+  })(t0);
+  var g=$("#gGrade");g.textContent="GRADE "+grade;
+  g.setAttribute("fill",grade==="A"?"#facc15":grade==="B"?"#f59e0b":"#ef4444");
+}
+function drawPath(p,dur){
+  dur=dur||950;var L=p.getTotalLength();
+  p.style.strokeDasharray=L;p.style.strokeDashoffset=L;
+  var t0=performance.now();
+  (function f(t){
+    var k=Math.min(1,(t-t0)/dur);
+    p.style.strokeDashoffset=L*(1-(1-Math.pow(1-k,3)));
+    if(k<1)requestAnimationFrame(f);
+  })(t0);
+}
+
+/* ============ DEGRADATION CHART ============ */
+function drawChart(soh,rul,grade){
+  var used=Math.max(15,Math.round((100-soh)*18)),total=used+Math.max(rul,5);
+  var X0=56,X1=594,YT=22,YB=200;
+  function y(s){return YT+(100-s)*(YB-YT)/70}
+  function x(c){return X0+(c/total)*(X1-X0)}
+  var col=grade==="A"?"#facc15":grade==="B"?"#f59e0b":"#ef4444";
+  var g="";
+  [90,80,70,60,50,40].forEach(function(s){
+    g+='<line x1="'+X0+'" y1="'+y(s).toFixed(1)+'" x2="'+X1+'" y2="'+y(s).toFixed(1)+'" stroke="'+(s===60?"#ef4444":"#1a1a1e")+'" stroke-dasharray="'+(s===60?"5 6":"none")+'" stroke-width="1" opacity="'+(s===60?".7":"1")+'"/>'+
+       '<text x="'+(X0-8)+'" y="'+(y(s)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="#55555c">'+s+'%</text>';
+  });
+  g+='<text x="'+X1+'" y="'+(y(60)-9).toFixed(1)+'" text-anchor="end" font-size="9" fill="#ef4444">EOL 60%</text>';
+  g+='<line x1="'+X0+'" y1="'+YB+'" x2="'+X1+'" y2="'+YB+'" stroke="#1a1a1e"/>';
+  var d="M "+x(0).toFixed(1)+" "+y(100).toFixed(1);
+  for(var i=1;i<=6;i++){
+    var t=i/6,s=100-(100-soh)*Math.pow(t,1.35)+(i<6?Math.sin(i*7)*0.8:0);
+    d+=" L "+x(used*t).toFixed(1)+" "+y(s).toFixed(1);
+  }
+  var px=x(used).toFixed(1),py=y(soh).toFixed(1),ex=x(total).toFixed(1),ey=y(60).toFixed(1);
+  var proj="M "+px+" "+py+" Q "+((+px+ +ex)/2).toFixed(1)+" "+(+py-(+py- +ey)*0.12).toFixed(1)+" "+ex+" "+ey;
+  $("#chartSvg").innerHTML=g+
+    '<path id="cHist" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linecap="round"/>'+
+    '<path id="cProj" class="projp" d="'+proj+'" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5 6" opacity=".7"/>'+
+    '<circle cx="'+px+'" cy="'+py+'" r="4.5" fill="'+col+'" stroke="#09090b" stroke-width="2"/>'+
+    '<text x="'+px+'" y="'+(+py-15).toFixed(1)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="'+col+'">NOW · SOH '+Math.round(soh)+'%</text>'+
+    '<circle cx="'+ex+'" cy="'+ey+'" r="4" fill="none" stroke="#ef4444" stroke-width="1.5"/>'+
+    '<text x="310" y="224" text-anchor="middle" font-size="9" fill="#55555c">CYCLE 0</text>'+
+    '<text x="'+px+'" y="224" text-anchor="middle" font-size="9" fill="#55555c">CYCLE '+used.toLocaleString()+'</text>'+
+    '<text x="'+X1+'" y="224" text-anchor="end" font-size="9" fill="#ef4444">EOL CYCLE '+total.toLocaleString()+'</text>';
+  drawPath(document.getElementById("cHist"),1000);
+  setTimeout(function(){var p=document.getElementById("cProj");if(p)p.style.opacity="1"},800);
+}
+
+/* ============ PIPELINE STEPS ============ */
+async function animateSteps(){
+  var items=$$("#steps li");
+  items.forEach(function(li){li.className="";li.querySelector(".s-st").innerHTML=""});
+  for(var i=0;i<items.length;i++){
+    var li=items[i];
+    li.className="run";
+    li.querySelector(".s-st").innerHTML='<span class="spin"></span>';
+    await sleep(440);
+    li.className="done";
+    li.querySelector(".s-st").innerHTML='<span class="okc">✓</span>';
+  }
+}
+
+/* ============ BACKEND (exact Lambda payload contract) ============ */
+function parseGrade(g,rul){
+  if(typeof g==="string"){var m=g.match(/grade\s*([abc])/i);if(m)return m[1].toUpperCase()}
+  return rul>=900?"A":rul>=300?"B":"C";
+}
+async function simulate(p){
+  await sleep(1100);
+  var rul=Math.round(1250*Math.pow(p["Discharge Time (s)"]/1450,1.8)+p["Time at 4.15V (s)"]*0.12+(p["Max. Voltage Dischar. (V)"]-p["Min. Voltage Charg. (V)"])*30);
+  return{rul:rul,grade:parseGrade(null,rul),timestamp:new Date().toISOString(),simulated:true};
+}
+async function callLambda(payload){
+  var url=state.endpoint;
+  if(!url||url.indexOf("YOUR_FUNCTION_URL")!==-1)return simulate(payload);
+  try{
+    var res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    var j=await res.json();
+    var rul=Number(j.predicted_rul_cycles)||0;
+    return{rul:rul,grade:parseGrade(j.health_grade,rul),timestamp:j.timestamp||new Date().toISOString(),battery_id:j.battery_id,simulated:false};
+  }catch(e){
+    var s=await simulate(payload);s.error=String(e);return s;
+  }
+}
+
+/* ============ RESULTS ============ */
+var GRADE_INFO={
+  A:{t:"GRADE A — HEALTHY BATTERY",s:"SOH 80%+ · SAFE FOR DC FAST CHARGING",d:"Battery pack in prime condition. Safe for high-speed highway driving and DC fast charging."},
+  B:{t:"GRADE B — MODERATE DEGRADATION",s:"SOH 60–80% · MONITOR CAPACITY FADE",d:"Moderate capacity fade detected. Recommend cell balancing check at next service interval."},
+  C:{t:"GRADE C — CRITICAL DEGRADATION",s:"SOH <60% · END-OF-LIFE RISK",d:"⚠️ Approaching end-of-life. Critical alert emailed to owner for cell replacement."}
+};
+function estSOH(grade,rul){
+  function c(v,a,b){return Math.min(b,Math.max(a,v))}
+  if(grade==="A")return c(82+(rul/1400)*16,82,98);
+  if(grade==="B")return c(60+(rul/900)*19,60,79);
+  return c(30+(rul/300)*29,30,59);
+}
+function showResult(grade,rul,soh){
+  var gi=GRADE_INFO[grade],rc=$("#resCard");
+  rc.classList.remove("hidden","pop","crit");void rc.offsetWidth;
+  if(grade==="C")rc.classList.add("crit");else rc.classList.add("pop");
+  $("#resBody").innerHTML=
+    '<div class="banner g'+grade+'"><div class="bt">'+gi.t+'</div><div class="bs">'+gi.s+' · ~'+rul.toLocaleString()+' CYCLES REMAINING · EST. SOH '+Math.round(soh)+'%</div></div>'+
+    '<p class="dir"><b style="color:var(--txt)">Action Directive:</b> '+gi.d+'</p>'+
+    (grade==="C"?'<div class="alerts">⚠ END-OF-LIFE RISK<br>⚠ CELL REPLACEMENT ADVISED<br>📧 OWNER ALERT DISPATCHED</div>':"");
+  var chip=$("#gchip");
+  chip.textContent=gi.t.split("—")[0].trim();
+  chip.className="gchip g"+grade;
+  $("#dirTxt").textContent=gi.d;
+}
+async function animateCert(email){
+  var c=$("#certCard");c.classList.remove("hidden");
+  $("#certMail").textContent=email;
+  $("#cst").textContent="DISPATCHING…";$("#cbar").style.width="0%";
+  await sleep(220);
+  for(var w=0;w<=100;w+=2){$("#cbar").style.width=w+"%";await sleep(16)}
+  $("#cst").innerHTML='<span class="ok">✓ DELIVERED</span>';
+}
+
+/* ============ RUN DIAGNOSIS ============ */
+document.getElementById("runBtn").addEventListener("click",async function(){
+  if(state.running)return;
+  state.running=true;
+  function val(k){return +document.getElementById("s_"+k).value}
+  var payload={
+    battery_id:$("#batteryId").value||"UNKNOWN-PACK",
+    user_email:state.email,
+    "Discharge Time (s)":val("dis"),
+    "Max. Voltage Dischar. (V)":val("maxv"),
+    "Min. Voltage Charg. (V)":val("minv"),
+    "Time at 4.15V (s)":val("t415"),
+    "Time constant current (s)":val("tcc"),
+    "Charging time (s)":val("tch")
+  };
+  var btn=$("#runBtn");
+  btn.disabled=true;btn.textContent="ANALYZING…";
+  $("#tele").classList.add("scan");
+  $("#resCard").classList.add("hidden");$("#certCard").classList.add("hidden");
+  $("#simBadge").classList.add("hidden");$("#simNote").classList.add("hidden");
+  var data;
+  try{
+    var r=await Promise.all([animateSteps(),callLambda(payload)]);
+    data=r[1];
+  }catch(e){data=await simulate(payload)}
+  $("#tele").classList.remove("scan");
+  if(data.simulated){$("#simBadge").classList.remove("hidden");$("#simNote").classList.remove("hidden")}
+  var soh=estSOH(data.grade,data.rul);
+  showResult(data.grade,data.rul,soh);
+  animateGauge(soh,data.grade);
+  countUp($("#rulVal"),data.rul);
+  $("#mVin").textContent=data.battery_id||payload.battery_id;
+  $("#mTs").textContent=data.timestamp||"—";
+  setTimeout(function(){drawChart(soh,data.rul,data.grade)},260);
+  setTimeout(function(){animateCert(state.email)},750);
+  btn.disabled=false;btn.textContent="⚡ RUN AI DIAGNOSIS";
+  state.running=false;
+});
+</script>
+</body>
+</html>
