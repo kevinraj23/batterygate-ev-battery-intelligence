@@ -93,9 +93,9 @@ def lambda_handler(event, context):
         # ML Inference
         predicted_rul = float(score(x))
         
-        if predicted_rul > 100:
+        if predicted_rul > 600:
             grade = "Grade A (Healthy - >80% SOH)"
-        elif predicted_rul > 40:
+        elif predicted_rul > 200:
             grade = "Grade B (Moderate - 60-80% SOH)"
         else:
             grade = "Grade C (Degraded - Replace/Recycle)"

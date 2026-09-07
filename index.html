@@ -557,17 +557,17 @@ document.getElementById("setSave").addEventListener("click",function(){
 
 /* ============ PRESETS + TELEMETRY ============ */
 var PRESETS={
-  A:{label:"Brand New Tata Nexon EV",id:"TATA-NEXON-001",dis:1450,maxv:4.22,minv:3.15,t415:650,tcc:1980,tch:2900},
-  B:{label:"Moderate Used Ather 450X",id:"ATHER-450X-042",dis:950,maxv:4.05,minv:2.85,t415:320,tcc:1200,tch:2100},
-  C:{label:"Degraded Ola S1 Pack",id:"USED-OLA-PACK-999",dis:450,maxv:3.75,minv:2.45,t415:45,tcc:400,tch:850}
+  A:{label:"Brand New Tata Nexon EV",id:"TATA-NEXON-001",dis:2113,maxv:4.00,minv:3.43,t415:4766,tcc:5732,tch:9055},
+  B:{label:"Moderate Used Ather 450X",id:"ATHER-450X-042",dis:1494,maxv:3.90,minv:3.58,t415:2730,tcc:3587,tch:8252},
+  C:{label:"Degraded Ola S1 Pack",id:"USED-OLA-PACK-999",dis:946,maxv:3.79,minv:3.70,t415:1273,tcc:1880,tch:7460}
 };
 var FIELDS=[
-  {k:"dis", l:"Discharge Duration", u:"s", min:200, max:1800, step:10},
-  {k:"tch", l:"Charging Time",      u:"s", min:500, max:3500, step:10},
-  {k:"maxv",l:"Max Voltage (Disch.)",u:"V", min:3.0, max:4.5,  step:0.01},
-  {k:"minv",l:"Min Voltage (Chg.)", u:"V", min:2.0, max:3.8,  step:0.01},
-  {k:"t415",l:"Time @ 4.15V (CV)",  u:"s", min:0,   max:800,  step:5},
-  {k:"tcc", l:"Time in CC Mode",    u:"s", min:200, max:2200, step:10}
+  {k:"dis", l:"Discharge Duration", u:"s", min:500, max:3000, step:10},
+  {k:"tch", l:"Charging Time",      u:"s", min:4000, max:12000, step:50},
+  {k:"maxv",l:"Max Voltage (Disch.)",u:"V", min:3.50, max:4.30,  step:0.01},
+  {k:"minv",l:"Min Voltage (Chg.)", u:"V", min:3.00, max:4.00,  step:0.01},
+  {k:"t415",l:"Time @ 4.15V (CV)",  u:"s", min:500, max:7000, step:20},
+  {k:"tcc", l:"Time in CC Mode",    u:"s", min:1000, max:8000, step:20}
 ];
 function fmt(v,k){return (k==="maxv"||k==="minv")?(+v).toFixed(2):Math.round(+v).toString()}
 
@@ -694,11 +694,12 @@ async function animateSteps(){
 /* ============ BACKEND (exact Lambda payload contract) ============ */
 function parseGrade(g,rul){
   if(typeof g==="string"){var m=g.match(/grade\s*([abc])/i);if(m)return m[1].toUpperCase()}
-  return rul>=900?"A":rul>=300?"B":"C";
+  return rul>600?"A":rul>200?"B":"C";
 }
 async function simulate(p){
   await sleep(1100);
-  var rul=Math.round(1250*Math.pow(p["Discharge Time (s)"]/1450,1.8)+p["Time at 4.15V (s)"]*0.12+(p["Max. Voltage Dischar. (V)"]-p["Min. Voltage Charg. (V)"])*30);
+  var dis = p["Discharge Time (s)"] || 1500;
+  var rul = Math.max(0, Math.min(1133, Math.round((dis - 900) * 0.88)));
   return{rul:rul,grade:parseGrade(null,rul),timestamp:new Date().toISOString(),simulated:true};
 }
 async function callLambda(payload){
@@ -723,9 +724,9 @@ var GRADE_INFO={
 };
 function estSOH(grade,rul){
   function c(v,a,b){return Math.min(b,Math.max(a,v))}
-  if(grade==="A")return c(82+(rul/1400)*16,82,98);
-  if(grade==="B")return c(60+(rul/900)*19,60,79);
-  return c(30+(rul/300)*29,30,59);
+  if(grade==="A")return c(80+((rul-600)/(1133-600))*20,80,99);
+  if(grade==="B")return c(60+((rul-200)/(600-200))*20,60,79);
+  return c(20+(rul/200)*39,20,59);
 }
 function showResult(grade,rul,soh){
   var gi=GRADE_INFO[grade],rc=$("#resCard");
