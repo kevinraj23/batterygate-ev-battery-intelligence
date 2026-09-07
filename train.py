@@ -47,9 +47,9 @@ y = df[TARGET]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print(f"\n[SPLIT] {len(X_train):,} train / {len(X_test):,} test samples")
 
-# 3. Train Random Forest Model
+# 3. Train Random Forest Model (optimized for serverless Lambda execution)
 print("[TRAIN] Training Random Forest Regressor on real HNEI battery data...")
-model = RandomForestRegressor(n_estimators=100, max_depth=12, random_state=42, n_jobs=-1)
+model = RandomForestRegressor(n_estimators=30, max_depth=8, random_state=42, n_jobs=-1)
 model.fit(X_train, y_train)
 
 # 4. Evaluate

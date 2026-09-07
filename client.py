@@ -1,12 +1,17 @@
 import requests
 import json
+import sys
+import io
 
-# ⚠️ YOUR LIVE AWS FUNCTION URL:
+# Fix Windows console encoding
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+# Live AWS Function URL:
 LAMBDA_URL = "https://rh3tpejwo2iyov7nmgrtfomyji0sohry.lambda-url.us-east-1.on.aws/"
 
 # --- TEST 1: HEALTHY BATTERY ---
 print("=" * 60)
-print("🧪 TEST 1: GRADING A HEALTHY BATTERY (EXPECT GRADE A)")
+print("[TEST 1] GRADING A HEALTHY BATTERY (EXPECT GRADE A)")
 print("=" * 60)
 healthy_battery = {
     "battery_id": "TATA-NEXON-001",
@@ -22,7 +27,7 @@ print(json.dumps(r1.json(), indent=2))
 
 # --- TEST 2: DEGRADED BATTERY (TRIGGERS EMAIL) ---
 print("\n" + "=" * 60)
-print("🧪 TEST 2: GRADING A DEGRADED BATTERY (EXPECT GRADE C + EMAIL ALERT)")
+print("[TEST 2] GRADING A DEGRADED BATTERY (EXPECT GRADE C + EMAIL ALERT)")
 print("=" * 60)
 degraded_battery = {
     "battery_id": "USED-OLA-PACK-999",
