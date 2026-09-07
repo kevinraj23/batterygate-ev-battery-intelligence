@@ -55,7 +55,7 @@ def send_dynamic_email(recipient_email, battery_id, rul, grade):
                 <tr><td style="padding: 6px 0;"><b>Cloud Provider:</b></td><td>AWS Lambda Serverless ML</td></tr>
             </table>
             <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="font-size: 12px; color: #9ca3af; text-align: center;">Powered by NASA PCoE Battery Degradation Benchmark & AWS Cloud</p>
+            <p style="font-size: 12px; color: #9ca3af; text-align: center;">Powered by HNEI Battery Degradation Benchmark & AWS Cloud</p>
         </div>
     </body>
     </html>
