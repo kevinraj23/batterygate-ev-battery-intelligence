@@ -341,7 +341,11 @@ footer{margin-top:36px;text-align:center;font:400 .58rem var(--mono);color:var(-
         <div class="set-pop" id="setPop">
           <div class="ph" style="margin:0">CLOUD ENDPOINT</div>
           <div class="field"><input type="url" id="setUrl" placeholder="https://…lambda-url….on.aws/"></div>
-          <button class="btn" id="setSave">SAVE ENDPOINT</button>
+          <div class="field" style="margin-top:10px">
+            <label style="font-size:0.56rem;color:var(--muted);letter-spacing:0.1em">GEMINI API KEY (OPTIONAL)</label>
+            <input type="password" id="setGeminiKey" placeholder="AIzaSy... (leave blank for physics rules)">
+          </div>
+          <button class="btn" id="setSave">SAVE SETTINGS</button>
         </div>
         <button class="btn-ghost" id="outBtn">SIGN OUT</button>
       </div>
@@ -405,6 +409,7 @@ footer{margin-top:36px;text-align:center;font:400 .58rem var(--mono);color:var(-
             <li><span class="s-n">04</span>Health classification<span class="s-st"></span></li>
             <li><span class="s-n">05</span>DynamoDB logging<span class="s-st"></span></li>
             <li><span class="s-n">06</span>Certificate dispatch<span class="s-st"></span></li>
+            <li><span class="s-n">07</span>BatterySentry · Climate &amp; Thermal Risk<span class="s-st"></span></li>
           </ul>
           <div id="simNote" class="hidden">Live endpoint unreachable (check Function URL / CORS) — showing simulated model output so the demo continues.</div>
         </div>
@@ -412,6 +417,55 @@ footer{margin-top:36px;text-align:center;font:400 .58rem var(--mono);color:var(-
         <div class="panel hidden" id="resCard">
           <div class="ph">AI DIAGNOSIS RESULT</div>
           <div id="resBody"></div>
+        </div>
+
+        <!-- ================= BATTERYSENTRY COPILOT CARD ================= -->
+        <div class="panel hidden" id="sentryCard" style="border: 1px solid rgba(250, 204, 21, 0.4); background: linear-gradient(180deg, #121216, #16161c); margin-top: 18px;">
+          <div class="ph" style="margin-bottom: 12px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:1.1rem;">🛡️</span>
+              <span style="color:var(--yl2); font-weight:700; letter-spacing:.12em;">BATTERYSENTRY™ · ACTIVE SAFETY COPILOT</span>
+            </div>
+            <span id="sentryLiveBadge" class="pill" style="border-color:var(--yl3); color:var(--yl2); font-size:0.55rem;">ANALYZING</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-top:12px;">
+            <!-- Thermal Runaway Risk -->
+            <div class="tile" id="tileRisk" style="border-left:3px solid var(--red);">
+              <div class="t-l">Thermal Runaway Risk</div>
+              <div id="sentryRisk" style="font-size:1.55rem; font-weight:700; font-family:var(--mono); color:var(--red); margin-top:4px;">--%</div>
+              <div id="sentryThreat" style="font-size:0.6rem; color:var(--muted); margin-top:3px; line-height:1.3;">Awaiting Assessment</div>
+            </div>
+
+            <!-- Ambient Climate -->
+            <div class="tile" id="tileTemp" style="border-left:3px solid var(--yl2);">
+              <div class="t-l">Ambient Cell Stress</div>
+              <div id="sentryTemp" style="font-size:1.55rem; font-weight:700; font-family:var(--mono); color:var(--yl2); margin-top:4px;">--°C</div>
+              <div style="font-size:0.6rem; color:var(--muted); margin-top:3px;">Live Open-Meteo Telemetry</div>
+            </div>
+
+            <!-- Lifespan Salvage -->
+            <div class="tile" id="tileSavings" style="border-left:3px solid #10b981;">
+              <div class="t-l">Lifespan Extension</div>
+              <div id="sentrySavings" style="font-size:1.55rem; font-weight:700; font-family:var(--mono); color:#10b981; margin-top:4px;">+-- Cycles</div>
+              <div style="font-size:0.6rem; color:var(--muted); margin-top:3px;">Via Adaptive BMS Throttling</div>
+            </div>
+          </div>
+
+          <!-- Adaptive BMS Recommendation -->
+          <div style="margin-top:14px; background:#0b0b0e; border:1px solid var(--line2); border-radius:9px; padding:12px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+              <span style="font-size:0.62rem; color:var(--yl2); font-family:var(--mono); letter-spacing:0.1em; font-weight:600;">⚡ ADAPTIVE BMS PRESCRIPTION</span>
+              <span id="sentryThrottleRate" style="font-family:var(--mono); font-size:0.62rem; color:#ececee; background:var(--panel2); padding:2px 8px; border-radius:4px; border:1px solid var(--line2);">--</span>
+            </div>
+            <p id="sentryDirective" style="font-size:0.78rem; line-height:1.6; color:var(--txt); margin-top:8px;">
+              Waiting for diagnosis...
+            </p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); font-size:0.62rem; color:var(--dim);">
+              <span>Cut-off Threshold: <b id="sentryCutoff" style="color:var(--txt)">--</b></span>
+              <span id="sentryEngineTag" style="font-family:var(--mono); color:var(--muted);">Engine: Physics Rules</span>
+            </div>
+          </div>
         </div>
 
         <div class="panel hidden" id="certCard">
@@ -543,6 +597,7 @@ document.getElementById("outBtn").addEventListener("click",function(){
 document.getElementById("gearBtn").addEventListener("click",function(e){
   e.stopPropagation();
   $("#setUrl").value=state.endpoint;
+  $("#setGeminiKey").value=state.geminiKey||"";
   $("#setPop").classList.toggle("open");
 });
 document.addEventListener("click",function(e){
@@ -550,9 +605,11 @@ document.addEventListener("click",function(e){
 });
 document.getElementById("setSave").addEventListener("click",function(){
   state.endpoint=$("#setUrl").value.trim();
+  state.geminiKey=$("#setGeminiKey").value.trim();
   store.set("bg_endpoint",state.endpoint);
+  store.set("bg_gemini",state.geminiKey);
   $("#setPop").classList.remove("open");
-  toast("Cloud endpoint saved");
+  toast("Settings updated successfully");
 });
 
 /* ============ PRESETS + TELEMETRY ============ */
@@ -685,7 +742,7 @@ async function animateSteps(){
     var li=items[i];
     li.className="run";
     li.querySelector(".s-st").innerHTML='<span class="spin"></span>';
-    await sleep(440);
+    await sleep(360);
     li.className="done";
     li.querySelector(".s-st").innerHTML='<span class="okc">✓</span>';
   }
@@ -700,20 +757,89 @@ async function simulate(p){
   await sleep(1100);
   var dis = p["Discharge Time (s)"] || 1500;
   var rul = Math.max(0, Math.min(1133, Math.round((dis - 900) * 0.88)));
-  return{rul:rul,grade:parseGrade(null,rul),timestamp:new Date().toISOString(),simulated:true};
+  var grade = parseGrade(null, rul);
+  var ambTemp = 36.4;
+  var risk = grade === "C" ? 84 : (grade === "B" ? 56 : 26);
+  var threat = risk >= 70 ? "CRITICAL (High Lithium Plating / Thermal Hazard)" : (risk >= 40 ? "ELEVATED (Thermal Stress · Impedance Rise)" : "OPTIMAL (Safe Thermal Operational Window)");
+  var throttle = risk >= 70 ? "Max 15 kW (Slow AC Only · Inhibit DC Fast)" : (risk >= 40 ? "Max 30 kW (Throttled DC Fast Charge)" : "Full 50 kW Supported (Standard Fast Charge)");
+  var cutoff = risk >= 70 ? "75% SoC" : (risk >= 40 ? "80% SoC" : "90% SoC");
+  var saved = risk >= 70 ? 180 : (risk >= 40 ? 115 : 40);
+  var directive = risk >= 70
+    ? "Elevated ambient heat (" + ambTemp + "°C) and internal impedance indicate high risk of anode lithium plating during fast charging. Immediate throttling to " + throttle + " and cutoff at " + cutoff + " prevents thermal runaway while preserving ~" + saved + " cycles."
+    : (risk >= 40
+      ? "Moderate cell degradation under " + ambTemp + "°C operating temperature. Restricting fast charge to " + throttle + " up to " + cutoff + " minimizes lattice stress, yielding approximately ~" + saved + " extra cycles."
+      : "Nominal cell impedance observed at " + ambTemp + "°C. Standard charging supported; gentle overnight cycling will sustain maximum retention.");
+
+  return{
+    rul: rul,
+    grade: grade,
+    timestamp: new Date().toISOString(),
+    battery_id: p.battery_id,
+    simulated: true,
+    battery_sentry: {
+      risk_score: risk,
+      threat_level: threat,
+      ambient_temp_c: ambTemp,
+      bms_recommendation: {
+        max_charging_rate: throttle,
+        cutoff_soc: cutoff,
+        projected_cycles_saved: saved
+      },
+      agent_directive: directive,
+      gemini_powered: false
+    }
+  };
 }
 async function callLambda(payload){
   var url=state.endpoint;
   if(!url||url.indexOf("YOUR_FUNCTION_URL")!==-1)return simulate(payload);
   try{
+    if(state.geminiKey) payload.gemini_api_key = state.geminiKey;
     var res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     if(!res.ok)throw new Error("HTTP "+res.status);
     var j=await res.json();
     var rul=Number(j.predicted_rul_cycles)||0;
-    return{rul:rul,grade:parseGrade(j.health_grade,rul),timestamp:j.timestamp||new Date().toISOString(),battery_id:j.battery_id,simulated:false};
+    return{
+      rul:rul,
+      grade:parseGrade(j.health_grade,rul),
+      timestamp:j.timestamp||new Date().toISOString(),
+      battery_id:j.battery_id,
+      battery_sentry:j.battery_sentry,
+      simulated:false
+    };
   }catch(e){
     var s=await simulate(payload);s.error=String(e);return s;
   }
+}
+
+/* ============ BATTERYSENTRY RENDERING ============ */
+function renderBatterySentry(sentry){
+  var card=$("#sentryCard");
+  if(!sentry){card.classList.add("hidden");return;}
+  card.classList.remove("hidden");
+  var risk = Number(sentry.risk_score) || 0;
+  var col = risk >= 70 ? "#ef4444" : (risk >= 40 ? "#f59e0b" : "#10b981");
+  var badge = $("#sentryLiveBadge");
+  badge.textContent = risk >= 70 ? "CRITICAL ALERT" : (risk >= 40 ? "ACTIVE SHIELD ENGAGED" : "NORMAL MONITORING");
+  badge.style.borderColor = col;
+  badge.style.color = col;
+  
+  var rEl = $("#sentryRisk");
+  rEl.style.color = col;
+  countUp(rEl, risk);
+  setTimeout(function(){ rEl.textContent = risk + "%"; }, 650);
+
+  $("#sentryThreat").textContent = sentry.threat_level || "Thermal Threat Index";
+  $("#tileRisk").style.borderLeftColor = col;
+  $("#sentryTemp").textContent = (sentry.ambient_temp_c || 35) + "°C";
+  var bms = sentry.bms_recommendation || {};
+  $("#sentrySavings").textContent = "+" + (bms.projected_cycles_saved || 0) + " Cycles";
+  $("#sentryThrottleRate").textContent = bms.max_charging_rate || "Throttled Rate";
+  $("#sentryCutoff").textContent = bms.cutoff_soc || "80% SoC";
+  $("#sentryDirective").textContent = sentry.agent_directive || "Preservation protocol active.";
+  $("#sentryEngineTag").textContent = sentry.gemini_powered ? "⚡ Engine: Google Gemini Flash" : "🛡️ Engine: Physics Rules Engine";
+  if(sentry.gemini_powered) $("#sentryEngineTag").style.color = "#38bdf8";
+  else $("#sentryEngineTag").style.color = "var(--muted)";
 }
 
 /* ============ RESULTS ============ */
@@ -768,7 +894,9 @@ document.getElementById("runBtn").addEventListener("click",async function(){
   var btn=$("#runBtn");
   btn.disabled=true;btn.textContent="ANALYZING…";
   $("#tele").classList.add("scan");
-  $("#resCard").classList.add("hidden");$("#certCard").classList.add("hidden");
+  $("#resCard").classList.add("hidden");
+  $("#sentryCard").classList.add("hidden");
+  $("#certCard").classList.add("hidden");
   $("#simBadge").classList.add("hidden");$("#simNote").classList.add("hidden");
   var data;
   try{
@@ -779,6 +907,7 @@ document.getElementById("runBtn").addEventListener("click",async function(){
   if(data.simulated){$("#simBadge").classList.remove("hidden");$("#simNote").classList.remove("hidden")}
   var soh=estSOH(data.grade,data.rul);
   showResult(data.grade,data.rul,soh);
+  renderBatterySentry(data.battery_sentry);
   animateGauge(soh,data.grade);
   countUp($("#rulVal"),data.rul);
   $("#mVin").textContent=data.battery_id||payload.battery_id;

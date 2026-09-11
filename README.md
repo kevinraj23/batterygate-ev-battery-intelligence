@@ -58,6 +58,7 @@ BatteryGate uses **only 6 real physical measurements**:
 ## ⚡ Technical Highlights
 
 * **Sub-50ms Speed:** Pure-Python model transpilation (`model_code.py`) runs without heavy libraries (`scikit-learn` or `numpy` not needed at runtime).
+* **BatterySentry Copilot:** Real-time thermal runaway threat modeling ($0\text{--}100\%$) and adaptive BMS charging prescription powered by live climate data (Open-Meteo) and Google Gemini AI reasoning.
 * **$0 Idle Cost:** Powered entirely by AWS Lambda serverless architecture.
 * **Live Storage & Email:** AWS DynamoDB records all scans; automated HTML certificates sent via SMTP.
 
