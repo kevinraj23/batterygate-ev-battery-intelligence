@@ -754,27 +754,62 @@ function parseGrade(g,rul){
   return rul>600?"A":rul>200?"B":"C";
 }
 async function simulate(p){
-  await sleep(1100);
-  var dis = p["Discharge Time (s)"] || 1500;
-  var rul = Math.max(0, Math.min(1133, Math.round((dis - 900) * 0.88)));
+  await sleep(1000);
+  var dis = Number(p["Discharge Time (s)"]) || 1500;
+  var t415 = Number(p["Time at 4.15V (s)"]) || 2500;
+  var tch = Number(p["Charging time (s)"]) || 8000;
+  var maxv = Number(p["Max. Voltage Dischar. (V)"]) || 3.9;
+  var minv = Number(p["Min. Voltage Charg. (V)"]) || 3.5;
+  var bid = p.battery_id || "EV-PACK";
+
+  var rul = Math.max(5, Math.min(1133, Math.round((dis - 880) * 0.86)));
   var grade = parseGrade(null, rul);
-  var ambTemp = 36.4;
-  var risk = grade === "C" ? 84 : (grade === "B" ? 56 : 26);
-  var threat = risk >= 70 ? "CRITICAL (High Lithium Plating / Thermal Hazard)" : (risk >= 40 ? "ELEVATED (Thermal Stress · Impedance Rise)" : "OPTIMAL (Safe Thermal Operational Window)");
-  var throttle = risk >= 70 ? "Max 15 kW (Slow AC Only · Inhibit DC Fast)" : (risk >= 40 ? "Max 30 kW (Throttled DC Fast Charge)" : "Full 50 kW Supported (Standard Fast Charge)");
-  var cutoff = risk >= 70 ? "75% SoC" : (risk >= 40 ? "80% SoC" : "90% SoC");
-  var saved = risk >= 70 ? 180 : (risk >= 40 ? 115 : 40);
-  var directive = risk >= 70
-    ? "Elevated ambient heat (" + ambTemp + "°C) and internal impedance indicate high risk of anode lithium plating during fast charging. Immediate throttling to " + throttle + " and cutoff at " + cutoff + " prevents thermal runaway while preserving ~" + saved + " cycles."
-    : (risk >= 40
-      ? "Moderate cell degradation under " + ambTemp + "°C operating temperature. Restricting fast charge to " + throttle + " up to " + cutoff + " minimizes lattice stress, yielding approximately ~" + saved + " extra cycles."
-      : "Nominal cell impedance observed at " + ambTemp + "°C. Standard charging supported; gentle overnight cycling will sustain maximum retention.");
+
+  // Dynamic ambient temperature based on time of day / realistic variance
+  var baseTemp = 28 + Math.round(((Date.now() / 60000) % 10) * 0.8 * 10) / 10;
+  var ambTemp = Math.round((baseTemp + (grade === "C" ? 3.5 : 0)) * 10) / 10;
+
+  // Continuous physics risk calculation
+  var low415Stress = t415 < 2200 ? ((2200 - t415) / 38) : 0;
+  var heatStress = Math.max(0, (ambTemp - 24) * 2.6);
+  var ageStress = (1133 - rul) / 13.5;
+  var voltSag = Math.max(0, (maxv - minv - 0.3) * 35);
+
+  var risk = Math.min(98, Math.max(8, Math.round(low415Stress + heatStress + ageStress + voltSag)));
+  var targetKw = Math.max(10, Math.min(50, Math.round(52 - (risk * 0.42))));
+
+  var threat, throttle, cutoff;
+  if(risk >= 75 || grade === "C"){
+    threat = "CRITICAL (High Lithium Plating / Thermal Hazard)";
+    throttle = "Max " + targetKw + " kW (Slow AC Only · Inhibit Fast Charge)";
+    cutoff = (risk >= 85 ? "72% SoC" : "76% SoC");
+  } else if(risk >= 40 || grade === "B"){
+    threat = "ELEVATED (Thermal Stress · Impedance Rise)";
+    throttle = "Max " + targetKw + " kW (Throttled DC Fast Charge)";
+    cutoff = (risk >= 55 ? "80% SoC" : "84% SoC");
+  } else {
+    threat = "OPTIMAL (Safe Thermal Operational Window)";
+    throttle = "Supported " + targetKw + " kW (Standard Fast Charge)";
+    cutoff = "90% SoC";
+  }
+
+  var saved = Math.max(20, Math.round((1133 - rul) * 0.165 + Math.max(0, ambTemp - 25) * 3.6 + (t415 / 160)));
+  var cvPct = Math.round((t415 / Math.max(1, tch)) * 100);
+
+  var directive;
+  if(risk >= 70 || grade === "C"){
+    directive = "Under " + ambTemp + "°C ambient heat, pack " + bid + " exhibits accelerated internal impedance with CV stage compressed to " + Math.round(t415) + "s (" + cvPct + "% of cycle). Restricting charging to " + throttle + " and cutting off at " + cutoff + " prevents irreversible lithium dendrite plating, recovering ~" + saved + " cycles.";
+  } else if(risk >= 40 || grade === "B"){
+    directive = "Telemetry for " + bid + " indicates moderate cathode stress under " + ambTemp + "°C operating heat. Capping charge rate to " + throttle + " and ending at " + cutoff + " stabilizes cell lattice structure, yielding approximately ~" + saved + " additional lifecycle cycles.";
+  } else {
+    directive = "Pack " + bid + " shows nominal electrochemical health with " + Math.round(t415) + "s peak voltage hold at " + ambTemp + "°C. Standard charging at " + throttle + " up to " + cutoff + " is supported with periodic cell balancing to protect ~" + saved + " cycles.";
+  }
 
   return{
     rul: rul,
     grade: grade,
     timestamp: new Date().toISOString(),
-    battery_id: p.battery_id,
+    battery_id: bid,
     simulated: true,
     battery_sentry: {
       risk_score: risk,

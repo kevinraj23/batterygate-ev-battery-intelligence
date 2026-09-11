@@ -71,7 +71,7 @@ def get_ambient_temperature(lat=13.0827, lon=80.2707):
                 temp = float(payload.get("current", {}).get("temperature_2m", 35.0))
                 return round(temp, 1)
     except Exception as e:
-        print(f"⚠️ Open-Meteo weather fetch fallback: {e}")
+        print(f"[WARN] Open-Meteo weather fetch fallback: {e}")
     return 35.0  # Default tropical baseline temperature
 
 
@@ -80,14 +80,13 @@ def get_ambient_temperature(lat=13.0827, lon=80.2707):
 # =============================================================
 def call_gemini_sentry(prompt, api_key):
     """
-    Direct zero-dependency call to Google Gemini 2.0 / 1.5 Flash via urllib.
+    Direct zero-dependency call to Google Gemini via urllib.
     Requires no pip packages, executing natively in AWS Lambda.
     """
     if not api_key or api_key.strip() in ("", "AIzaSyYourCopiedKeyHere"):
         return None
 
-    # Try gemini-2.0-flash first, fallback to gemini-1.5-flash
-    models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    models = ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
     for model in models:
         endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key.strip()}"
         body = {
@@ -103,7 +102,7 @@ def call_gemini_sentry(prompt, api_key):
                 data=json.dumps(body).encode("utf-8"),
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=4) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     res_json = json.loads(resp.read().decode("utf-8"))
                     candidates = res_json.get("candidates", [])
@@ -112,7 +111,7 @@ def call_gemini_sentry(prompt, api_key):
                         if parts:
                             return parts[0].get("text", "").strip()
         except Exception as err:
-            print(f"⚠️ Gemini ({model}) call error: {err}")
+            print(f"[WARN] Gemini ({model}) call error: {err}")
             continue
 
     return None
@@ -142,22 +141,24 @@ def run_battery_sentry(features, rul, grade, battery_id, ambient_temp, user_gemi
     raw_risk = heat_stress + low_415_penalty + aging_stress
     risk_score = int(min(98, max(5, round(raw_risk))))
 
-    # 2. Derive Adaptive BMS Thresholds
-    if risk_score >= 70 or "Grade C" in grade:
+    # 2. Derive Adaptive BMS Thresholds (Continuously Dynamic)
+    target_kw = max(10, min(50, round(52 - (risk_score * 0.42))))
+    
+    if risk_score >= 75 or "Grade C" in grade:
         threat_level = "CRITICAL (High Lithium Plating / Thermal Hazard)"
-        throttle_kw = "Max 15 kW (Slow AC Only · Inhibit DC Fast Charge)"
-        cutoff_soc = "75% SoC"
-        cycles_saved = 180
+        throttle_kw = f"Max {target_kw} kW (Slow AC Only · Inhibit Fast Charge)"
+        cutoff_soc = "72% SoC" if risk_score >= 85 else "76% SoC"
     elif risk_score >= 40 or "Grade B" in grade:
         threat_level = "ELEVATED (Thermal Stress · Impedance Rise)"
-        throttle_kw = "Max 30 kW (Throttled DC Fast Charge)"
-        cutoff_soc = "80% SoC"
-        cycles_saved = 115
+        throttle_kw = f"Max {target_kw} kW (Throttled DC Fast Charge)"
+        cutoff_soc = "80% SoC" if risk_score >= 55 else "84% SoC"
     else:
         threat_level = "OPTIMAL (Safe Thermal Operational Window)"
-        throttle_kw = "Full 50 kW Supported (Standard Fast Charge)"
+        throttle_kw = f"Supported {target_kw} kW (Standard Fast Charge)"
         cutoff_soc = "90% SoC"
-        cycles_saved = 40
+
+    # Differential lifecycle wear integral (Dynamic cycles saved)
+    cycles_saved = int(max(25, round((1133.0 - rul) * 0.165 + max(0.0, ambient_temp - 25.0) * 3.6 + (time_415 / 150.0))))
 
     # 3. Gemini Copilot Reasoning
     active_key = user_gemini_key if (user_gemini_key and len(user_gemini_key) > 10) else GEMINI_API_KEY
@@ -179,19 +180,23 @@ def run_battery_sentry(features, rul, grade, battery_id, ambient_temp, user_gemi
 
     # 4. Fallback Rule Engine (If Gemini key is empty or offline)
     if not gemini_directive:
-        if risk_score >= 70:
+        cv_ratio = round((time_415 / max(1.0, chg_time)) * 100, 1)
+        if risk_score >= 70 or "Grade C" in grade:
             gemini_directive = (
-                f"High ambient heat ({ambient_temp}°C) combined with reduced cell impedance creates elevated risk of anode lithium plating. "
-                f"Throttling charge rate to {throttle_kw} and cutting off at {cutoff_soc} prevents thermal runaway and salvages ~{cycles_saved} cycles."
+                f"Under {ambient_temp}°C ambient temperature, pack {battery_id} shows severe internal resistance rise "
+                f"(CV stage compressed to {int(time_415)}s / {cv_ratio}% of charge). Immediate throttling to {throttle_kw} "
+                f"with {cutoff_soc} cutoff prevents lithium dendrite plating and salvages approximately ~{cycles_saved} cycles."
             )
-        elif risk_score >= 40:
+        elif risk_score >= 40 or "Grade B" in grade:
             gemini_directive = (
-                f"Moderate degradation detected under {ambient_temp}°C ambient temperature. "
-                f"Restricting DC fast charging to {throttle_kw} up to {cutoff_soc} minimizes cathode lattice stress, extending useful life by ~{cycles_saved} cycles."
+                f"Telemetry for {battery_id} indicates moderate cell aging at {ambient_temp}°C operating heat. "
+                f"Restricting charge rate to {throttle_kw} and ending at {cutoff_soc} relieves cathode lattice strain, "
+                f"yielding ~{cycles_saved} additional operating cycles."
             )
         else:
             gemini_directive = (
-                f"Pack impedance is within healthy parameters at {ambient_temp}°C. Standard charging profile supported with normal cell balancing recommended."
+                f"Pack {battery_id} demonstrates robust electrochemical retention with {int(time_415)}s CV holding at {ambient_temp}°C. "
+                f"Standard charging at {throttle_kw} up to {cutoff_soc} is safe; routine cell balancing at service will preserve ~{cycles_saved} cycles."
             )
 
     return {
