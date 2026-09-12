@@ -86,14 +86,14 @@ def call_gemini_sentry(prompt, api_key):
     if not api_key or api_key.strip() in ("", "AIzaSyYourCopiedKeyHere"):
         return None
 
-    models = ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+    models = ["gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.6-flash"]
     for model in models:
         endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key.strip()}"
         body = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 220
+                "temperature": 0.7,
+                "maxOutputTokens": 350
             }
         }
         try:
@@ -102,14 +102,15 @@ def call_gemini_sentry(prompt, api_key):
                 data=json.dumps(body).encode("utf-8"),
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=3) as resp:
+            with urllib.request.urlopen(req, timeout=7) as resp:
                 if resp.status == 200:
                     res_json = json.loads(resp.read().decode("utf-8"))
                     candidates = res_json.get("candidates", [])
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            return parts[0].get("text", "").strip()
+                        texts = [p.get("text", "") for p in parts if p.get("text")]
+                        if texts:
+                            return " ".join(texts).strip()
         except Exception as err:
             print(f"[WARN] Gemini ({model}) call error: {err}")
             continue
@@ -167,37 +168,63 @@ def run_battery_sentry(features, rul, grade, battery_id, ambient_temp, user_gemi
     if active_key:
         prompt = (
             f"You are BatterySentry, an autonomous EV battery safety and lifespan copilot.\n"
-            f"Vehicle: {battery_id}\n"
-            f"Health: {grade}, Remaining Useful Life: {rul:.1f} cycles.\n"
+            f"Vehicle / Pack: {battery_id}\n"
+            f"Health Status: {grade}, Remaining Useful Life: {rul:.1f} cycles.\n"
             f"Ambient Climate: {ambient_temp}°C.\n"
             f"Thermal Runaway Risk Score: {risk_score}% ({threat_level}).\n"
             f"BMS Action: Cap charging rate to '{throttle_kw}' and terminate charge at '{cutoff_soc}'.\n"
             f"Projected Lifespan Salvage: ~{cycles_saved} cycles.\n"
-            f"Write a concise, professional 2-sentence technical directive to the technician/driver "
-            f"explaining the physical reason for this throttling and how it preserves the pack."
+            f"Write a concise, professional, and freshly phrased 2-sentence technical directive to the technician/driver "
+            f"explaining the physical and electrochemical reasons for this throttling and how it preserves the pack."
         )
-        gemini_directive = call_gemini_sentry(prompt, active_key)
+        raw_gemini = call_gemini_sentry(prompt, active_key)
+    else:
+        raw_gemini = None
+
+    gemini_powered = bool(raw_gemini)
+    gemini_directive = raw_gemini
 
     # 4. Fallback Rule Engine (If Gemini key is empty or offline)
     if not gemini_directive:
+        seed = int(rul * 10 + ambient_temp * 10) % 2
         cv_ratio = round((time_415 / max(1.0, chg_time)) * 100, 1)
         if risk_score >= 70 or "Grade C" in grade:
-            gemini_directive = (
-                f"Under {ambient_temp}°C ambient temperature, pack {battery_id} shows severe internal resistance rise "
-                f"(CV stage compressed to {int(time_415)}s / {cv_ratio}% of charge). Immediate throttling to {throttle_kw} "
-                f"with {cutoff_soc} cutoff prevents lithium dendrite plating and salvages approximately ~{cycles_saved} cycles."
-            )
+            if seed == 0:
+                gemini_directive = (
+                    f"Under {ambient_temp}°C ambient temperature, pack {battery_id} shows severe internal resistance rise "
+                    f"(CV stage compressed to {int(time_415)}s / {cv_ratio}% of charge). Immediate throttling to {throttle_kw} "
+                    f"with {cutoff_soc} cutoff prevents lithium dendrite plating and salvages approximately ~{cycles_saved} cycles."
+                )
+            else:
+                gemini_directive = (
+                    f"Elevated thermal risk ({risk_score}%) detected on {battery_id} at {ambient_temp}°C. "
+                    f"Enforcing an emergency throttle to {throttle_kw} capped at {cutoff_soc} isolates anode degradation, "
+                    f"suppressing runaway vectors and reclaiming ~{cycles_saved} lifecycle cycles."
+                )
         elif risk_score >= 40 or "Grade B" in grade:
-            gemini_directive = (
-                f"Telemetry for {battery_id} indicates moderate cell aging at {ambient_temp}°C operating heat. "
-                f"Restricting charge rate to {throttle_kw} and ending at {cutoff_soc} relieves cathode lattice strain, "
-                f"yielding ~{cycles_saved} additional operating cycles."
-            )
+            if seed == 0:
+                gemini_directive = (
+                    f"Telemetry for {battery_id} indicates moderate cell aging at {ambient_temp}°C operating heat. "
+                    f"Restricting charge rate to {throttle_kw} and ending at {cutoff_soc} relieves cathode lattice strain, "
+                    f"yielding ~{cycles_saved} additional operating cycles."
+                )
+            else:
+                gemini_directive = (
+                    f"Sub-optimal voltage retention ({int(time_415)}s at 4.15V) on {battery_id} warrants active mitigation. "
+                    f"Applying a {throttle_kw} ceiling and stopping at {cutoff_soc} mitigates electrolyte breakdown at {ambient_temp}°C, "
+                    f"protecting ~{cycles_saved} remaining cycles."
+                )
         else:
-            gemini_directive = (
-                f"Pack {battery_id} demonstrates robust electrochemical retention with {int(time_415)}s CV holding at {ambient_temp}°C. "
-                f"Standard charging at {throttle_kw} up to {cutoff_soc} is safe; routine cell balancing at service will preserve ~{cycles_saved} cycles."
-            )
+            if seed == 0:
+                gemini_directive = (
+                    f"Pack {battery_id} demonstrates robust electrochemical retention with {int(time_415)}s CV holding at {ambient_temp}°C. "
+                    f"Standard charging at {throttle_kw} up to {cutoff_soc} is safe; routine cell balancing at service will preserve ~{cycles_saved} cycles."
+                )
+            else:
+                gemini_directive = (
+                    f"Telemetry for {battery_id} reflects nominal impedance and stable thermal headroom at {ambient_temp}°C. "
+                    f"Operating at {throttle_kw} up to {cutoff_soc} delivers optimal turnaround time while maintaining an estimated +{cycles_saved} cycle reserve."
+                )
 
     return {
         "risk_score": risk_score,
@@ -209,7 +236,7 @@ def run_battery_sentry(features, rul, grade, battery_id, ambient_temp, user_gemi
             "projected_cycles_saved": cycles_saved
         },
         "agent_directive": gemini_directive,
-        "gemini_powered": bool(gemini_directive and active_key and active_key != "")
+        "gemini_powered": gemini_powered
     }
 
 
